@@ -8,7 +8,7 @@ from tokenizers import Tokenizer as TokenizerFast
 from hailo_platform import VDevice, FormatType, HailoSchedulingAlgorithm
 import clip
 import torch
-from picamera2 import Picamera2
+from my_camera import Camera
 import argparse
 
 
@@ -27,6 +27,7 @@ COSINE_SIMILARITY_THRESHOLD = 0.7
 
 def argparser():
     parser = argparse.ArgumentParser(description="Configurations for Flourence.")
+    parser.add_argument("--video", type=str, default="/dev/video0")
     parser.add_argument('--no-speaker', action="store_true", help='Use this flag in case you did not connected a speaker')
 
     return parser.parse_args()
@@ -118,27 +119,18 @@ def infer_florence2(image, processor, davit_session, encoder, decoder, tokenizer
     #print("third model h8 took %s seconds" % (end - start))
     return res
 
-def picam_init():
-    picam2 = Picamera2()
-    #preview_config = picam2.create_preview_configuration(main={"size": (2464, 3280, 3)})
-    #capture_config = picam2.create_still_configuration(main={"size": (2464, 3280, 3), "format": "RGB888"})
-    preview_config = picam2.create_preview_configuration(main={"size": (2464, 3280)})
-    capture_config = picam2.create_still_configuration(main={"size": (2464, 3280), "format": "RGB888"})
-    picam2.configure(preview_config)
-    picam2.start(show_preview=True)
-    return picam2, preview_config, capture_config
-
-def picam_capture(picam2, capture_config, preview_config):
-    picam2.switch_mode(capture_config)
-    array = picam2.capture_array("main")
-    picam2.switch_mode(preview_config)
-    return array
-
-def caption_loop(picam2, capture_config, preview_config, processor, davit_session, encoder, decoder, tokenizer, clip_model, no_speaker):
+def caption_loop(camera, processor, davit_session, encoder, decoder, tokenizer, clip_model, no_speaker):
     last_caption = None
     while True:
         start = time.time()
-        caption = infer_florence2(picam_capture(picam2, capture_config, preview_config), processor, davit_session, encoder, decoder, tokenizer)
+        is_capture_success, image= camera.get_picture()
+        if not is_capture_success :
+            print("is not capture success")
+            continue
+
+        camera.show_picture(image)
+        print(image[0][0])
+        caption = infer_florence2(image, processor, davit_session, encoder, decoder, tokenizer)
         if last_caption is None or match_texts(clip_model, last_caption, caption) < COSINE_SIMILARITY_THRESHOLD:
             print(f"NEW EVENT ALERT!!!!! - {caption}")
             if not no_speaker:
@@ -156,6 +148,7 @@ def main():
     clip_model, _ = clip.load("ViT-B/32", "cpu")
     params = VDevice.create_params()
     params.scheduling_algorithm = HailoSchedulingAlgorithm.ROUND_ROBIN    
+    camera= Camera(args.video)
     with VDevice(params) as vd:
         encoder_infer_model = vd.create_infer_model(ENCODER_PATH)
         encoder_infer_model.input().set_format_type(FormatType.FLOAT32)
@@ -166,9 +159,8 @@ def main():
             decoder_infer_model.input('florence2_transformer_decoder/input_layer2').set_format_type(FormatType.FLOAT32)
             decoder_infer_model.output().set_format_type(FormatType.FLOAT32)
             with decoder_infer_model.configure() as decoder:
-                picam2, preview_config, capture_config = picam_init()
                 print("Initialized succesfully")
-                caption_loop(picam2, capture_config, preview_config, processor, davit_session, encoder, decoder, tokenizer, clip_model, args.no_speaker)
+                caption_loop(camera, processor, davit_session, encoder, decoder, tokenizer, clip_model, args.no_speaker)
                     
 
 if __name__=="__main__":
