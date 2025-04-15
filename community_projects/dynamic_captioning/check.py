@@ -39,19 +39,18 @@ def match_texts(model, text1, text2):
     start= time.time()
     # Tokenize the texts and encode them into embeddings
     texts = [text1, text2]
-    text_inputs = clip.tokenize(texts)
+    with torch.no_grad() :
+        text_inputs = clip.tokenize(texts)
 
-    # Get the text features (embeddings) from CLIP
-    text_features = model.encode_text(text_inputs)
+        # Get the text features (embeddings) from CLIP
+        text_features = model.encode_text(text_inputs)
 
-    # Normalize the features to unit vectors (important for similarity comparisons)
-    text_features /= text_features.norm(dim=-1, keepdim=True)
+        # Normalize the features to unit vectors (important for similarity comparisons)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
 
-    # Compute cosine similarity between the two text embeddings
-    similarity = torch.cosine_similarity(text_features[0], text_features[1], dim=0)
-    #print (f"similarity between '{text1}' and '{text2}' is: {similarity.item()}")
-    print(f"last, match_text elapsed, {round(time.time()- start, 4)}")
-    return similarity.item()
+        # Compute cosine similarity between the two text embeddings
+        similarity = torch.cosine_similarity(text_features[0], text_features[1], dim=0)
+        return similarity.item()
 
 
 
@@ -134,7 +133,7 @@ def caption_loop(camera, processor, davit_session, encoder, decoder, tokenizer, 
             print(f"NEW EVENT ALERT!!!!! - {caption}")
             if not no_speaker:
                 os.system(f'espeak "{caption}" -s 130')
-        last_caption = caption
+            last_caption = caption
         timer.record("one loop", reset=True)
 
 def main():
