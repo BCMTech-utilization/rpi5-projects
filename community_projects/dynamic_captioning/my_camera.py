@@ -6,7 +6,7 @@ class Camera :
         self.cap= cv2.VideoCapture(video)
         self.video= video
         if not self.cap.isOpened() :
-            cap.release()
+            self.cap.release()
             raise RuntimeError("카메라를 사용할 수 없습니다.")
 
         # 비디오 사이즈 명시 및 정의
@@ -24,4 +24,5 @@ class Camera :
         cv2.waitKey(1)
 
     def reset(self) :
+        self.cap.release()
         self.cap= cv2.VideoCapture(self.video)
